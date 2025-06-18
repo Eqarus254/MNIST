@@ -7,66 +7,64 @@ Original file is located at
     https://colab.research.google.com/drive/1Sh1Qsgp_MUVreTIDzkVUn_Z9axzegKWB
 """
 
-# Import libraries
+import streamlit as st
 import numpy as np
 import matplotlib.pyplot as plt
 import tensorflow as tf
 from tensorflow.keras import layers, models
 from tensorflow.keras.datasets import mnist
 from tensorflow.keras.utils import to_categorical
-from PIL import Image
 
-# Load and preprocess data
-(x_train, y_train), (x_test, y_test) = mnist.load_data()
+st.title("🧠 MNIST Handwritten Digit Classifier")
 
-# Normalize the data
-x_train = x_train.astype('float32') / 255.0
-x_test  = x_test.astype('float32') / 255.0
+@st.cache_resource
+def train_model():
+    # Load and preprocess data
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+    x_train = x_train.astype("float32") / 255.0
+    x_test = x_test.astype("float32") / 255.0
 
-# Reshape for CNN input: (samples, height, width, channels)
-x_train = x_train.reshape(-1, 28, 28, 1)
-x_test  = x_test.reshape(-1, 28, 28, 1)
-y_train = to_categorical(y_train)
-y_test  = to_categorical(y_test)
+    x_train = x_train.reshape(-1, 28, 28, 1)
+    x_test = x_test.reshape(-1, 28, 28, 1)
+    y_train = to_categorical(y_train)
+    y_test = to_categorical(y_test)
 
-# Build CNN model
-model = models.Sequential([
-    layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
-    layers.MaxPooling2D((2, 2)),
+    model = models.Sequential([
+        layers.Conv2D(32, (3, 3), activation='relu', input_shape=(28, 28, 1)),
+        layers.MaxPooling2D((2, 2)),
+        layers.Conv2D(64, (3, 3), activation='relu'),
+        layers.MaxPooling2D((2, 2)),
+        layers.Flatten(),
+        layers.Dense(64, activation='relu'),
+        layers.Dense(10, activation='softmax')
+    ])
 
-    layers.Conv2D(64, (3, 3), activation='relu'),
-    layers.MaxPooling2D((2, 2)),
+    model.compile(optimizer='adam',
+                  loss='categorical_crossentropy',
+                  metrics=['accuracy'])
 
-    layers.Flatten(),
-    layers.Dense(64, activation='relu'),
-    layers.Dense(10, activation='softmax')  # 10 classes for digits 0-9
-])
+    model.fit(x_train, y_train, epochs=3, batch_size=64, verbose=0)
+    test_loss, test_acc = model.evaluate(x_test, y_test, verbose=0)
+    return model, x_test, y_test, test_acc
 
-# Compile the model
-model.compile(optimizer='adam',
-              loss='categorical_crossentropy',
-              metrics=['accuracy'])
+with st.spinner("Training model..."):
+    model, x_test, y_test, acc = train_model()
+st.success(f"✅ Model trained with test accuracy: {acc:.4f}")
 
-# Train the model
-history = model.fit(x_train, y_train, epochs=5, batch_size=64, validation_split=0.1)
+# Visualize predictions
+st.subheader("🎯 Random Predictions")
+num_images = st.slider("Number of images", 1, 10, 5)
 
-# Evaluate the model
-test_loss, test_acc = model.evaluate(x_test, y_test)
-print(f'\n✅ Test Accuracy: {test_acc:.4f}')
-
-# Visualize predictions on 5 random test images
-num_images = 5
 indices = np.random.choice(len(x_test), num_images, replace=False)
+fig, axs = plt.subplots(1, num_images, figsize=(num_images*2, 2))
 
-plt.figure(figsize=(10, 2))
 for i, idx in enumerate(indices):
     img = x_test[idx]
     true_label = np.argmax(y_test[idx])
     pred_label = np.argmax(model.predict(img.reshape(1, 28, 28, 1), verbose=0))
 
-    plt.subplot(1, num_images, i + 1)
-    plt.imshow(img.squeeze(), cmap='gray')
-    plt.title(f"True: {true_label}\nPred: {pred_label}")
-    plt.axis('off')
-plt.tight_layout()
-plt.show()
+    axs[i].imshow(img.squeeze(), cmap='gray')
+    axs[i].set_title(f"T:{true_label} / P:{pred_label}")
+    axs[i].axis("off")
+
+st.pyplot(fig)
